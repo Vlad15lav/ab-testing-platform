@@ -41,7 +41,12 @@ class DataService:
         :return df (pd.DataFrame): датафрейм с подмножеством данных.
         """
         df = self.table_name_2_table[table_name]
-        df = df[(df['date'] >= begin_date) & (df['date'] < end_date)]
+
+        if begin_date:
+            df = df[df['date'] >= begin_date]
+
+        if end_date:
+            df = df[df['date'] < end_date]
 
         if user_ids:
             df = df[df['user_id'].isin(user_ids)]
