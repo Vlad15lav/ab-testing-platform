@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+# import pandas as pd
 
 from pydantic import BaseModel
 from scipy import stats
@@ -8,17 +8,22 @@ from scipy import stats
 class Design(BaseModel):
     """Дата-класс с описание параметров эксперимента.
 
-    statistical_test - тип статтеста. ['ttest']
+    statistical_test - тип статтеста. ['ttest', 'bootstrap']
     effect - размер эффекта в процентах
     alpha - уровень значимости
     beta - допустимая вероятность ошибки II рода
-    sample_size - размер групп
+    bootstrap_iter - количество итераций бутстрепа
+    bootstrap_ci_type - способ построения доверительного интервала.
+        ['normal', 'percentile', 'pivotal']
+    bootstrap_agg_func - метрика эксперимента. ['mean', 'quantile 95']
     """
-    statistical_test: str = 'ttest'
+    statistical_test: str
     effect: float
     alpha: float = 0.05
     beta: float = 0.1
-    sample_size: int
+    bootstrap_iter: int = 1000
+    bootstrap_ci_type: str
+    bootstrap_agg_func: str
 
 
 class ExperimentsService:
@@ -27,14 +32,23 @@ class ExperimentsService:
 
         :param metrics_a_group (np.array): массив значений метрик группы A
         :param metrics_a_group (np.array): массив значений метрик группы B
-        :param design (Design): объект с данными,
-        описывающий параметры эксперимента
+        :param design (Design): объект с данными, описывающий
+            параметры эксперимента
         :return (float): значение p-value
         """
         if design.statistical_test == 'ttest':
-            pvalue = stats.ttest_ind(metrics_a_group, metrics_b_group).pvalue
-
-            return round(pvalue, 4)
+            _, pvalue = stats.ttest_ind(metrics_a_group, metrics_b_group)
+            return pvalue
+        elif design.statistical_test == 'bootstrap':
+            bootstrap_metrics, pe_metric = self._generate_bootstrap_metrics(
+                metrics_a_group,
+                metrics_b_group,
+                design
+                )
+            _, pvalue = self._run_bootstrap(bootstrap_metrics,
+                                            pe_metric,
+                                            design)
+            return pvalue
         else:
             raise ValueError('Неверный design.statistical_test')
 
@@ -152,6 +166,65 @@ class ExperimentsService:
                                                        n_iter)
         return self._estimate_errors(group_generator, design, effect_add_type)
 
+    def _generate_bootstrap_metrics(self, data_one, data_two, design):
+        """Генерирует значения метрики, полученные с помощью бутстрепа.
+
+        :param data_one, data_two (np.array): значения метрик в группах.
+        :param design (Design): объект с данными, описывающий
+            параметры эксперимента
+        :return bootstrap_metrics, pe_metric:
+            bootstrap_metrics (np.array) - значения статистики теста
+                псчитанное по бутстрепным подвыборкам
+            pe_metric (float) - значение статистики теста посчитанное
+                по исходным данным
+        """
+        bootstrap_data_one = np.random.choice(data_one,
+                                              (len(data_one),
+                                               design.bootstrap_iter))
+        bootstrap_data_two = np.random.choice(data_two,
+                                              (len(data_two),
+                                               design.bootstrap_iter))
+        if design.bootstrap_agg_func == 'mean':
+            bootstrap_metrics = bootstrap_data_two.mean(axis=0) - \
+                bootstrap_data_one.mean(axis=0)
+            pe_metric = data_two.mean() - data_one.mean()
+            return bootstrap_metrics, pe_metric
+        elif design.bootstrap_agg_func == 'quantile 95':
+            bootstrap_metrics = (
+                np.quantile(bootstrap_data_two, 0.95, axis=0)
+                - np.quantile(bootstrap_data_one, 0.95, axis=0)
+            )
+            pe_metric = np.quantile(data_two, 0.95) - np.quantile(data_one,
+                                                                  0.95)
+            return bootstrap_metrics, pe_metric
+        else:
+            raise ValueError('Неверное значение design.bootstrap_agg_func')
+
+    def _run_bootstrap(self, bootstrap_metrics, pe_metric, design):
+        """Строит доверительный интервал и проверяет
+        значимость отличий с помощью бутстрепа.
+
+        :param bootstrap_metrics (np.array): статистика теста,
+            посчитанная на бутстрепных выборках.
+        :param pe_metric (float): значение статистики теста посчитанное
+            по исходным данным.
+        :return ci, pvalue:
+            ci [float, float] - границы доверительного интервала
+            pvalue (float) - 0 если есть статистически значимые отличия,
+                иначе 1.
+                Настоящее pvalue для произвольного способа построения
+                доверительного интервала с помощью бутстрепа вычислить
+                не тривиально.
+                Поэтому мы будем использовать краевые значения 0 и 1.
+        """
+        z_score_inv = stats.norm.ppf(1 - design.alpha / 2)
+        bootstrap_std = np.std(bootstrap_metrics)
+        left = pe_metric - z_score_inv * bootstrap_std
+        right = pe_metric + z_score_inv * bootstrap_std
+        ci = (left, right)
+        pvalue = float(left < 0 < right)
+        return ci, pvalue
+
 
 if __name__ == '__main__':
     # Test for get_pvalue method
@@ -189,23 +262,44 @@ if __name__ == '__main__':
     # print('simple test passed')
 
     # Test for estimate alpha and beta error
-    _a = np.array([1., 2, 3, 4, 5])
-    _b = np.array([1., 2, 3, 4, 10])
-    group_generator = ([a, b] for a, b in ((_a, _b),))
-    design = Design(effect=50., sample_size=5)
-    effect_add_type = 'all_percent'
+    # _a = np.array([1., 2, 3, 4, 5])
+    # _b = np.array([1., 2, 3, 4, 10])
+    # group_generator = ([a, b] for a, b in ((_a, _b),))
+    # design = Design(effect=50., sample_size=5)
+    # effect_add_type = 'all_percent'
 
-    ideal_pvalues_aa = [0.579584]
-    ideal_pvalues_ab = [0.260024]
-    ideal_first_type_error = 0.
-    ideal_second_type_error = 1.
+    # ideal_pvalues_aa = [0.579584]
+    # ideal_pvalues_ab = [0.260024]
+    # ideal_first_type_error = 0.
+    # ideal_second_type_error = 1.
+
+    # experiments_service = ExperimentsService()
+    # pvalues_aa, pvalues_ab, first_type_error, second_type_error = \
+    #     experiments_service._estimate_errors(group_generator,
+    #                                          design, effect_add_type)
+    # np.testing.assert_almost_equal(ideal_pvalues_aa, pvalues_aa, decimal=4)
+    # np.testing.assert_almost_equal(ideal_pvalues_ab, pvalues_ab, decimal=4)
+    # assert ideal_first_type_error == first_type_error
+    # assert ideal_second_type_error == second_type_error
+    # print('simple test passed')
+
+    # Test for bootstrap
+    bootstrap_metrics = np.arange(-490, 510)
+    pe_metric = 5.
+    design = Design(
+        statistical_test='bootstrap',
+        effect=5,
+        bootstrap_ci_type='normal',
+        bootstrap_agg_func='mean'
+    )
+    ideal_ci = (-560.79258, 570.79258)
+    ideal_pvalue = 1.
 
     experiments_service = ExperimentsService()
-    pvalues_aa, pvalues_ab, first_type_error, second_type_error = \
-        experiments_service._estimate_errors(group_generator,
-                                             design, effect_add_type)
-    np.testing.assert_almost_equal(ideal_pvalues_aa, pvalues_aa, decimal=4)
-    np.testing.assert_almost_equal(ideal_pvalues_ab, pvalues_ab, decimal=4)
-    assert ideal_first_type_error == first_type_error
-    assert ideal_second_type_error == second_type_error
+    ci, pvalue = experiments_service._run_bootstrap(bootstrap_metrics,
+                                                    pe_metric,
+                                                    design)
+    np.testing.assert_almost_equal(ideal_ci, ci, decimal=4,
+                                   err_msg='Неверный доверительный интервал')
+    assert ideal_pvalue == pvalue, 'Неверный pvalue'
     print('simple test passed')
