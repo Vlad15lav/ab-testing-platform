@@ -1,6 +1,7 @@
 import pandas as pd
 
-from datetime import datetime
+from pydantic import BaseModel
+# from datetime import datetime
 
 
 class DataService:
@@ -57,8 +58,41 @@ class DataService:
         return df
 
 
+class Design(BaseModel):
+    """Дата-класс с описание параметров эксперимента.
+
+    statistical_test - тип статтеста. ['ttest', 'bootstrap']
+    effect - размер эффекта в процентах
+    alpha - уровень значимости
+    beta - допустимая вероятность ошибки II рода
+    bootstrap_iter - количество итераций бутстрепа
+    bootstrap_ci_type - способ построения доверительного интервала.
+        ['normal', 'percentile', 'pivotal']
+    bootstrap_agg_func - метрика эксперимента. ['mean', 'quantile 95']
+    metric_name - название целевой метрики эксперимента
+    metric_outlier_lower_bound - нижняя допустимая граница метрики,
+        всё что ниже считаем выбросами
+    metric_outlier_upper_bound - верхняя допустимая граница метрики,
+        всё что выше считаем выбросами
+    metric_outlier_process_type - способ обработки выбросов. ['drop', 'clip'].
+        'drop' - удаляем измерение, 'clip' - заменяем выброс на значение
+            ближайшей границы (lower_bound, upper_bound).
+    """
+    statistical_test: str = 'ttest'
+    effect: float = 3.
+    alpha: float = 0.05
+    beta: float = 0.1
+    bootstrap_iter: int = 1000
+    bootstrap_ci_type: str = 'normal'
+    bootstrap_agg_func: str = 'mean'
+    metric_name: str
+    metric_outlier_lower_bound: float
+    metric_outlier_upper_bound: float
+    metric_outlier_process_type: str
+
+
 class MetricsService:
-    def __init__(self, data_service):
+    def __init__(self, data_service=None):
         """Класс для вычисления метрик.
 
         :param data_service (DataService): объект класса,
@@ -200,6 +234,32 @@ class MetricsService:
         else:
             raise ValueError('Wrong metric name')
 
+    def process_outliers(self, metrics, design):
+        """Возвращает новый датафрейм с обработанными выбросами
+        в измерениях метрики.
+
+        :param metrics (pd.DataFrame): таблица со значениями метрики,
+            columns=['user_id', 'metric'].
+        :param design (Design): объект с данными, описывающий
+            параметры эксперимента.
+        :return df: columns=['user_id', 'metric']
+        """
+        process_type = design.metric_outlier_process_type
+        lower_bound = design.metric_outlier_lower_bound
+        upper_bound = design.metric_outlier_upper_bound
+        metrics = metrics.copy()
+
+        if process_type == 'drop':
+            metrics = metrics[(metrics['metric'] >= lower_bound) &
+                              (metrics['metric'] <= upper_bound)]
+        elif process_type == 'clip':
+            metrics[metrics['metric'] < lower_bound] = lower_bound
+            metrics[metrics['metric'] > upper_bound] = upper_bound
+        else:
+            raise ValueError('Wrong metric outlier process type')
+
+        return metrics
+
 
 def _chech_df(df, df_ideal, sort_by, reindex=False, set_dtypes=False):
     assert isinstance(df, pd.DataFrame), 'Функция вернула не pd.DataFrame.'
@@ -221,44 +281,67 @@ def _chech_df(df, df_ideal, sort_by, reindex=False, set_dtypes=False):
 
 
 if __name__ == '__main__':
-    df_sales = pd.DataFrame({
-        'sale_id': [1, 2, 3],
-        'date': [datetime(2022, 3, day, 11) for day in range(11, 14)],
-        'price': [1100, 900, 1500],
-        'user_id': ['1', '2', '1'],
+    # Test for revenue metric
+    # df_sales = pd.DataFrame({
+    #     'sale_id': [1, 2, 3],
+    #     'date': [datetime(2022, 3, day, 11) for day in range(11, 14)],
+    #     'price': [1100, 900, 1500],
+    #     'user_id': ['1', '2', '1'],
+    # })
+    # df_web_logs = pd.DataFrame({
+    #     'date': [datetime(2022, 3, day, 11) for day in range(10, 14)],
+    #     'load_time': [80.8, 90.1, 15.8, 19.7],
+    #     'user_id': ['3', '1', '2', '1'],
+    # })
+    # begin_date = datetime(2022, 3, 11, 9)
+    # end_date = datetime(2022, 4, 11, 9)
+
+    # ideal_response_time = pd.DataFrame({'user_id': ['1', '2', '1'],
+    #                                     'metric': [90.1, 15.8, 19.7]})
+    # ideal_revenue_web = pd.DataFrame({'user_id': ['1', '2'],
+    #                                   'metric': [2600., 900.]})
+    # ideal_revenue_all = pd.DataFrame({'user_id': ['1', '2', '3'],
+    #                                   'metric': [2600., 900., 0.]})
+
+    # data_service = DataService({'sales': df_sales, 'web-logs': df_web_logs})
+    # metrics_service = MetricsService(data_service)
+
+    # df_response_time = metrics_service.calculate_metric('response time',
+    #                                                     begin_date,
+    #                                                     end_date)
+    # df_revenue_web = metrics_service.calculate_metric('revenue (web)',
+    #                                                   begin_date,
+    #                                                   end_date)
+    # df_revenue_all = metrics_service.calculate_metric('revenue (all)',
+    #                                                   begin_date,
+    #                                                   end_date)
+
+    # _chech_df(df_response_time, ideal_response_time, ['user_id', 'metric'],
+    #           True, True)
+    # _chech_df(df_revenue_web, ideal_revenue_web, ['user_id', 'metric'],
+    #           True, True)
+    # _chech_df(df_revenue_all, ideal_revenue_all, ['user_id', 'metric'],
+    #           True, True)
+    # print('simple test passed')
+
+    # Test for remove outlier
+    metrics = pd.DataFrame({
+        'user_id': ['1', '2', '3'],
+        'metric': [1., 2, 3]
     })
-    df_web_logs = pd.DataFrame({
-        'date': [datetime(2022, 3, day, 11) for day in range(10, 14)],
-        'load_time': [80.8, 90.1, 15.8, 19.7],
-        'user_id': ['3', '1', '2', '1'],
+    design = Design(
+        metric_name='response_time',
+        metric_outlier_lower_bound=0.1,
+        metric_outlier_upper_bound=2.2,
+        metric_outlier_process_type='drop',
+    )
+    ideal_processed_metrics = pd.DataFrame({
+        'user_id': ['1', '2'],
+        'metric': [1., 2]
     })
-    begin_date = datetime(2022, 3, 11, 9)
-    end_date = datetime(2022, 4, 11, 9)
 
-    ideal_response_time = pd.DataFrame({'user_id': ['1', '2', '1'],
-                                        'metric': [90.1, 15.8, 19.7]})
-    ideal_revenue_web = pd.DataFrame({'user_id': ['1', '2'],
-                                      'metric': [2600., 900.]})
-    ideal_revenue_all = pd.DataFrame({'user_id': ['1', '2', '3'],
-                                      'metric': [2600., 900., 0.]})
-
-    data_service = DataService({'sales': df_sales, 'web-logs': df_web_logs})
-    metrics_service = MetricsService(data_service)
-
-    df_response_time = metrics_service.calculate_metric('response time',
-                                                        begin_date,
-                                                        end_date)
-    df_revenue_web = metrics_service.calculate_metric('revenue (web)',
-                                                      begin_date,
-                                                      end_date)
-    df_revenue_all = metrics_service.calculate_metric('revenue (all)',
-                                                      begin_date,
-                                                      end_date)
-
-    _chech_df(df_response_time, ideal_response_time, ['user_id', 'metric'],
-              True, True)
-    _chech_df(df_revenue_web, ideal_revenue_web, ['user_id', 'metric'],
-              True, True)
-    _chech_df(df_revenue_all, ideal_revenue_all, ['user_id', 'metric'],
-              True, True)
+    metrics_service = MetricsService()
+    processed_metrics = metrics_service.process_outliers(metrics, design)
+    _chech_df(processed_metrics, ideal_processed_metrics,
+              ['user_id', 'metric'], True, True)
     print('simple test passed')
