@@ -1,5 +1,5 @@
 import numpy as np
-# import pandas as pd
+import pandas as pd
 
 from pydantic import BaseModel
 from scipy import stats
@@ -16,33 +16,47 @@ class Design(BaseModel):
     bootstrap_ci_type - способ построения доверительного интервала.
         ['normal', 'percentile', 'pivotal']
     bootstrap_agg_func - метрика эксперимента. ['mean', 'quantile 95']
+    stratification - постстратификация. 'on' - использовать постстратификация,
+        'off - не использовать.
     """
-    statistical_test: str
-    effect: float
+    statistical_test: str = 'ttest'
+    effect: float = 5
     alpha: float = 0.05
     beta: float = 0.1
     bootstrap_iter: int = 1000
-    bootstrap_ci_type: str
-    bootstrap_agg_func: str
+    bootstrap_ci_type: str = 'normal'
+    bootstrap_agg_func: str = 'mean'
+    stratification: str = 'off'
 
 
 class ExperimentsService:
-    def get_pvalue(self, metrics_a_group, metrics_b_group, design):
+    def get_pvalue(self, metrics_strat_a_group, metrics_strat_b_group, design):
         """Применяет статтест, возвращает pvalue.
 
-        :param metrics_a_group (np.array): массив значений метрик группы A
-        :param metrics_a_group (np.array): массив значений метрик группы B
-        :param design (Design): объект с данными, описывающий
-            параметры эксперимента
+        :param metrics_strat_a_group (np.ndarray): значения метрик истрат
+            группы A.
+            shape = (n, 2), первый столбец - метрики, второй столбец - страты.
+        :param metrics_strat_b_group (np.ndarray): значения метрик и страт
+            группы B.
+            shape = (n, 2), первый столбец - метрики, второй столбец - страты.
+        :param design (Design): объект с данными, описывающий параметры
+            эксперимента
         :return (float): значение p-value
         """
         if design.statistical_test == 'ttest':
-            _, pvalue = stats.ttest_ind(metrics_a_group, metrics_b_group)
-            return pvalue
+            if design.stratification == 'off':
+                _, pvalue = stats.ttest_ind(metrics_strat_a_group,
+                                            metrics_strat_b_group)
+                return pvalue
+            elif design.stratification == 'on':
+                return self._ttest_strat(metrics_strat_a_group,
+                                         metrics_strat_b_group)
+            else:
+                raise ValueError('Неверный design.stratification')
         elif design.statistical_test == 'bootstrap':
             bootstrap_metrics, pe_metric = self._generate_bootstrap_metrics(
-                metrics_a_group,
-                metrics_b_group,
+                metrics_strat_a_group,
+                metrics_strat_b_group,
                 design
                 )
             _, pvalue = self._run_bootstrap(bootstrap_metrics,
@@ -225,63 +239,119 @@ class ExperimentsService:
         pvalue = float(left < 0 < right)
         return ci, pvalue
 
+    @staticmethod
+    def _calc_strat_mean(df: pd.DataFrame, weights: pd.Series) -> float:
+        """Считает стратифицированное среднее.
+
+        :param df: датафрейм с целевой метрикой и данными для стратификации
+        :param weights: маппинг {название страты: вес страты в популяции}
+        """
+        strat_mean = df.groupby('strat')['metric'].mean()
+        return (strat_mean * weights).sum()
+
+    @staticmethod
+    def _calc_strat_var(df: pd.DataFrame, weights: pd.Series) -> float:
+        """Считает стратифицированную дисперсию.
+
+        :param df: датафрейм с целевой метрикой и данными для стратификации
+        :param weights: маппинг {название страты: вес страты в популяции}
+        """
+        strat_var = df.groupby('strat')['metric'].var()
+        return (strat_var * weights).sum()
+
+    def _ttest_strat(self, metrics_strat_a_group, metrics_strat_b_group):
+        """Применяет постстратификацию, возвращает pvalue.
+
+        Веса страт считаем по данным обеих групп.
+        Предполагаем, что эксперимент проводится на всей популяции.
+        Веса страт нужно считать по данным всей популяции.
+
+        :param metrics_strat_a_group (np.ndarray): значения метрик и
+            страт группы A.
+            shape = (n, 2), первый столбец - метрики, второй столбец - страты.
+        :param metrics_strat_b_group (np.ndarray): значения метрик и
+            страт группы B.
+            shape = (n, 2), первый столбец - метрики, второй столбец - страты.
+        :param design (Design): объект с данными, описывающий
+            параметры эксперимента
+        :return (float): значение p-value
+        """
+        weights = pd.Series(np.hstack((
+            metrics_strat_a_group[:, 1],
+            metrics_strat_b_group[:, 1])
+            )).value_counts(normalize=True)
+        a = pd.DataFrame(metrics_strat_a_group, columns=['metric', 'strat'])
+        b = pd.DataFrame(metrics_strat_b_group, columns=['metric', 'strat'])
+
+        a_strat_mean = self._calc_strat_mean(a, weights)
+        b_strat_mean = self._calc_strat_mean(b, weights)
+
+        a_strat_var = self._calc_strat_var(a, weights)
+        b_strat_var = self._calc_strat_var(b, weights)
+
+        delta = b_strat_mean - a_strat_mean
+        std = (a_strat_var / len(a) + b_strat_var / len(b)) ** 0.5
+        pvalue = 2 * (1 - stats.norm.cdf(np.abs(delta / std)))
+
+        return pvalue
+
 
 if __name__ == '__main__':
     # Test for get_pvalue method
-    # metrics_a_group = np.array([964, 1123, 962, 1213, 914, 906,
-    #                             951, 1033, 987, 1082])
-    # metrics_b_group = np.array([952, 1064, 1091, 1079, 1158, 921,
-    #                             1161, 1064, 819, 1065])
-    # design = Design(statistical_test='ttest')
-    # ideal_pvalue = 0.612219
+    metrics_a_group = np.array([964, 1123, 962, 1213, 914, 906,
+                                951, 1033, 987, 1082])
+    metrics_b_group = np.array([952, 1064, 1091, 1079, 1158, 921,
+                                1161, 1064, 819, 1065])
+    design = Design(statistical_test='ttest')
+    ideal_pvalue = 0.612219
 
-    # experiments_service = ExperimentsService()
-    # pvalue = experiments_service.get_pvalue(metrics_a_group,
-    #                                         metrics_b_group,
-    #                                         design)
-    # np.testing.assert_almost_equal(ideal_pvalue, pvalue, decimal=4)
-    # print('simple test passed')
+    experiments_service = ExperimentsService()
+    pvalue = experiments_service.get_pvalue(metrics_a_group,
+                                            metrics_b_group,
+                                            design)
+    np.testing.assert_almost_equal(ideal_pvalue, pvalue, decimal=4)
+    print('simple test passed')
 
     # Test for estimate_sample_size method
-    # metrics = pd.DataFrame({
-    #     'user_id': [str(i) for i in range(10)],
-    #     'metric': [i for i in range(10)]
-    # })
-    # design = Design(
-    #     statistical_test='ttest',
-    #     alpha=0.05,
-    #     beta=0.1,
-    #     effect=3.
-    # )
-    # ideal_sample_size = 9513
+    metrics = pd.DataFrame({
+        'user_id': [str(i) for i in range(10)],
+        'metric': [i for i in range(10)]
+    })
+    design = Design(
+        statistical_test='ttest',
+        alpha=0.05,
+        beta=0.1,
+        effect=3.
+    )
+    ideal_sample_size = 9513
 
-    # experiments_service = ExperimentsService()
-    # sample_size = experiments_service.estimate_sample_size(metrics, design)
-    # print(sample_size)
-    # assert sample_size == ideal_sample_size, 'Неверно'
-    # print('simple test passed')
+    experiments_service = ExperimentsService()
+    sample_size = experiments_service.estimate_sample_size(metrics, design)
+    print(sample_size)
+    assert sample_size == ideal_sample_size, 'Неверно'
+    print('simple test passed')
 
     # Test for estimate alpha and beta error
-    # _a = np.array([1., 2, 3, 4, 5])
-    # _b = np.array([1., 2, 3, 4, 10])
-    # group_generator = ([a, b] for a, b in ((_a, _b),))
-    # design = Design(effect=50., sample_size=5)
-    # effect_add_type = 'all_percent'
+    _a = np.array([1., 2, 3, 4, 5])
+    _b = np.array([1., 2, 3, 4, 10])
+    group_generator = ([a, b] for a, b in ((_a, _b),))
+    design = Design(effect=50., sample_size=5)
+    effect_add_type = 'all_percent'
 
-    # ideal_pvalues_aa = [0.579584]
-    # ideal_pvalues_ab = [0.260024]
-    # ideal_first_type_error = 0.
-    # ideal_second_type_error = 1.
+    ideal_pvalues_aa = [0.579584]
+    ideal_pvalues_ab = [0.260024]
+    ideal_first_type_error = 0.
+    ideal_second_type_error = 1.
 
-    # experiments_service = ExperimentsService()
-    # pvalues_aa, pvalues_ab, first_type_error, second_type_error = \
-    #     experiments_service._estimate_errors(group_generator,
-    #                                          design, effect_add_type)
-    # np.testing.assert_almost_equal(ideal_pvalues_aa, pvalues_aa, decimal=4)
-    # np.testing.assert_almost_equal(ideal_pvalues_ab, pvalues_ab, decimal=4)
-    # assert ideal_first_type_error == first_type_error
-    # assert ideal_second_type_error == second_type_error
-    # print('simple test passed')
+    experiments_service = ExperimentsService()
+    pvalues_aa, pvalues_ab, first_type_error, second_type_error = \
+        experiments_service._estimate_errors(group_generator,
+                                             design, effect_add_type)
+    np.testing.assert_almost_equal(ideal_pvalues_aa, pvalues_aa, decimal=4)
+    np.testing.assert_almost_equal(ideal_pvalues_ab, pvalues_ab, decimal=4)
+    assert ideal_first_type_error == first_type_error
+    assert ideal_second_type_error == second_type_error
+    print('simple test passed')
 
     # Test for bootstrap
     bootstrap_metrics = np.arange(-490, 510)
@@ -302,4 +372,22 @@ if __name__ == '__main__':
     np.testing.assert_almost_equal(ideal_ci, ci, decimal=4,
                                    err_msg='Неверный доверительный интервал')
     assert ideal_pvalue == pvalue, 'Неверный pvalue'
+    print('simple test passed')
+
+    # Test for stratification
+    metrics_strat_a_group = np.zeros((10, 2,))
+    metrics_strat_a_group[:, 0] = np.arange(10)
+    metrics_strat_a_group[:, 1] = (np.arange(10) < 4).astype(float)
+    metrics_strat_b_group = np.zeros((10, 2,))
+    metrics_strat_b_group[:, 0] = np.arange(1, 11)
+    metrics_strat_b_group[:, 1] = (np.arange(10) < 5).astype(float)
+    design = Design(stratification='on')
+    ideal_pvalue = 0.037056
+
+    experiments_service = ExperimentsService()
+    pvalue = experiments_service.get_pvalue(metrics_strat_a_group,
+                                            metrics_strat_b_group, design)
+
+    np.testing.assert_almost_equal(ideal_pvalue, pvalue, decimal=4,
+                                   err_msg='Неверное значение pvalue')
     print('simple test passed')
