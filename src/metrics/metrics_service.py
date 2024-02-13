@@ -336,6 +336,73 @@ class MetricsService:
 
         return metrics
 
+    def calculate_linearized_metrics(
+        self,
+        control_metrics,
+        pilot_metrics,
+        control_user_ids=None,
+        pilot_user_ids=None
+    ):
+        """Считает значения метрики отношения.
+
+        Нужно вычислить параметр kappa (коэффициент в функции линеаризации)
+        по данным из control_metrics и использовать его для
+        вычисления линеаризованной метрики.
+
+        :param control_metrics (pd.DataFrame): датафрейм со значениями
+            метрики контрольной группы.
+            Значения в столбце 'user_id' не уникальны.
+            Измерения для одного user_id считаем зависимыми,
+            а разных user_id - независимыми.
+            columns=['user_id', 'metric']
+        :param pilot_metrics (pd.DataFrame): датафрейм со значениями
+            метрики экспериментальной группы.
+            Значения в столбце 'user_id' не уникальны.
+            Измерения для одного user_id считаем зависимыми, а разных
+            user_id - независимыми.
+            columns=['user_id', 'metric']
+        :param control_user_ids (list): список id пользователей
+            контрольной группы, для которых
+            нужно рассчитать метрику. Если None, то использовать
+            пользователей из control_metrics.
+            Если для какого-то пользователя нет записей в таблице
+            control_metrics, то его
+            линеаризованная метрика равна нулю.
+        :param pilot_user_ids (list): список id пользователей
+            экспериментальной группы, для которых
+            нужно рассчитать метрику. Если None, то использовать
+            пользователей из pilot_metrics.
+            Если для какого-то пользователя нет записей в таблице
+            pilot_metrics, то его
+            линеаризованная метрика равна нулю.
+        :return lin_control_metrics, lin_pilot_metrics:
+            columns=['user_id', 'metric']
+        """
+        kappa = control_metrics['metric'].mean()
+
+        df_result = []
+        for data_group, user_ids in [(control_metrics, control_user_ids),
+                                     (pilot_metrics, pilot_user_ids)]:
+            df_agg = data_group.groupby('user_id')\
+                .agg(sum_metric=('metric', 'sum'),
+                     count_metric=('metric', 'count')).reset_index()
+
+            if user_ids:
+                df_users = pd.DataFrame({'user_id': user_ids})
+            else:
+                df_users = df_agg[['user_id']]
+
+            df_agg['metric'] = df_agg['sum_metric'] - kappa *\
+                df_agg['count_metric']
+            df_agg = df_agg[['user_id', 'metric']]
+            df_linear = df_users.merge(right=df_agg,
+                                       how='left',
+                                       on='user_id').fillna(0)
+
+            df_result.append(df_linear)
+
+        return df_result
+
 
 def _chech_df(df, df_ideal, sort_by, reindex=False,
               set_dtypes=False, decimal=None):
@@ -454,4 +521,25 @@ if __name__ == '__main__':
     )
     _chech_df(metrics, ideal_metrics, ['user_id', 'metric'], True,
               True, decimal=1)
+    print('simple test passed')
+
+    # Test for Linearized
+    control_metrics = pd.DataFrame({'user_id': [1, 1, 2],
+                                    'metric': [3, 5, 7]})
+    pilot_metrics = pd.DataFrame({'user_id': [3, 3],
+                                  'metric': [3, 6]})
+    ideal_lin_control_metrics = pd.DataFrame({'user_id': [1, 2],
+                                              'metric': [-2, 2]})
+    ideal_lin_pilot_metrics = pd.DataFrame({'user_id': [3,],
+                                            'metric': [-1,]})
+
+    metrics_service = MetricsService()
+    lin_control_metrics, lin_pilot_metrics = \
+        metrics_service.calculate_linearized_metrics(
+            control_metrics, pilot_metrics
+            )
+    _chech_df(lin_control_metrics, ideal_lin_control_metrics,
+              ['user_id', 'metric'], True, True, decimal=3)
+    _chech_df(lin_pilot_metrics, ideal_lin_pilot_metrics,
+              ['user_id', 'metric'], True, True, decimal=3)
     print('simple test passed')
