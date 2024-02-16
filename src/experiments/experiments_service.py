@@ -3,6 +3,7 @@ import pandas as pd
 
 from pydantic import BaseModel
 from scipy import stats
+from stqdm import stqdm
 
 
 class Design(BaseModel):
@@ -23,6 +24,7 @@ class Design(BaseModel):
     effect: float = 5
     alpha: float = 0.05
     beta: float = 0.1
+    sample_size: int = 1000
     bootstrap_iter: int = 1000
     bootstrap_ci_type: str = 'normal'
     bootstrap_agg_func: str = 'mean'
@@ -104,14 +106,14 @@ class ExperimentsService:
             метрик в группах.
         """
         user_ids = metrics['user_id'].unique()
-        for _ in range(n_iter):
+        for _ in stqdm(range(n_iter)):
             a_user_ids, b_user_ids = np.random.choice(user_ids,
                                                       (2, sample_size),
                                                       False)
             a_metric_values = metrics.loc[metrics['user_id'].isin(a_user_ids),
-                                          'metric'].values
+                                          'metric'].values.astype('float64')
             b_metric_values = metrics.loc[metrics['user_id'].isin(b_user_ids),
-                                          'metric'].values
+                                          'metric'].values.astype('float64')
             yield a_metric_values, b_metric_values
 
     def _estimate_errors(self, group_generator, design, effect_add_type):
@@ -178,6 +180,7 @@ class ExperimentsService:
         group_generator = self._create_group_generator(metrics,
                                                        design.sample_size,
                                                        n_iter)
+
         return self._estimate_errors(group_generator, design, effect_add_type)
 
     def _generate_bootstrap_metrics(self, data_one, data_two, design):

@@ -78,7 +78,9 @@ with st.expander("Minimum detectable effect for Estimating a Population Mean",
                 st.markdown(f"<p class='result'>MDE: {effect}</p>",
                             unsafe_allow_html=True)
         except Exception:
-            pass
+            st.markdown("<p class='error'>\
+                        Enter correct design parameters!</p>",
+                        unsafe_allow_html=True)
 
 with st.expander("Minimum detectable effect to Estimate Proportion", True):
     col1, col2 = st.columns(2)
@@ -127,4 +129,6 @@ with st.expander("Minimum detectable effect to Estimate Proportion", True):
                 st.markdown(f"<p class='result'>MDE: {effect}</p>",
                             unsafe_allow_html=True)
         except Exception:
-            pass
+            st.markdown("<p class='error'>\
+                        Enter correct design parameters!</p>",
+                        unsafe_allow_html=True)
