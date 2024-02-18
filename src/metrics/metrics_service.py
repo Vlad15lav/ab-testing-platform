@@ -271,7 +271,8 @@ class MetricsService:
                          metric_name,
                          begin_date, end_date,
                          cuped='off',
-                         user_ids=None):
+                         user_ids=None,
+                         cuped_days=7):
         """Считает значения метрики.
 
         :param metric_name (str): название метрики
@@ -296,11 +297,11 @@ class MetricsService:
                 return self._calculate_revenue_web(begin_date,
                                                    end_date,
                                                    user_ids)
-            elif cuped == 'on (previous week revenue)':
+            elif cuped == 'on (previous weeks revenue)':
                 return self._calculate_revenue_cuped(begin_date,
                                                      end_date,
                                                      user_ids,
-                                                     days=7)
+                                                     days=cuped_days)
             else:
                 raise ValueError('Wrong cuped')
         elif metric_name == 'revenue (all)':

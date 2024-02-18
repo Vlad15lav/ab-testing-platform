@@ -74,7 +74,7 @@ with st.expander("Minimum detectable effect for Estimating a Population Mean",
 
             if uploaded_file or std_value:
                 effect = get_mde(std_data, sample_size,
-                                 alp_level, 1 - power_level)
+                                 alp_level, power_level)
                 st.markdown(f"<p class='result'>MDE: {effect}</p>",
                             unsafe_allow_html=True)
         except Exception:
@@ -102,7 +102,7 @@ with st.expander("Minimum detectable effect to Estimate Proportion", True):
                                          df.columns)
         df_stats = df[[select_metric_col]].copy()
 
-    # Кнопка для вычисления размера выборки
+    # Кнопка для вычисления MDE
     if st.button('Minimum Detectable Effect', key="p6"):
         if not sample_size:
             st.markdown("<p class='error'>Enter sample size!</p>",
@@ -125,7 +125,7 @@ with st.expander("Minimum detectable effect to Estimate Proportion", True):
             if uploaded_file or prop_level:
                 std_value = (prop_level * (1 - prop_level)) ** 0.5
                 effect = get_mde(std_value, sample_size,
-                                 alp_level, 1 - power_level)
+                                 alp_level, power_level)
                 st.markdown(f"<p class='result'>MDE: {effect}</p>",
                             unsafe_allow_html=True)
         except Exception:

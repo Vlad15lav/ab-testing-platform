@@ -5,6 +5,7 @@ from scipy import stats
 from src.experiments import Design, ExperimentsService
 from src.visualization import plot_pvalue_ecdf
 
+
 st.set_page_config(
         page_title="A/B Testing Platforme | Estimate Errors",
         page_icon="📈",
@@ -36,7 +37,7 @@ with col1:
 with col2:
     power_level = st.slider('Power level', 0.01, 0.99, 0.8, key='m4')
     effect = st.text_input('Relative Effect', key='m5')
-    n_iters = st.text_input('Iterations', key='m6')
+    n_iters = st.text_input('Iterations', 1000, key='m6')
 
 # Загрузка своего CSV файла
 uploaded_file = st.file_uploader("Upload CSV File", key='m7')
@@ -49,13 +50,13 @@ if uploaded_file:
     df_stats.rename(columns=({select_user_col: 'user_id',
                               select_metric_col: 'metric'}), inplace=True)
 
-    df_stats = df_stats.groupby('user_id')[['metric']].mean().reset_index()
-
-# Кнопка для вычисления размера выборки
+# Кнопка для оценки ошибок
 if st.button('Estimate Errors', key='m8') and uploaded_file:
     if not (sample_size or effect or n_iters):
         st.markdown("<p class='error'>Enter design parameters!</p>",
                     unsafe_allow_html=True)
+
+    df_stats = df_stats.groupby('user_id')[['metric']].mean().reset_index()
 
     try:
         alpha, beta = float(alp_level), 1-float(power_level)
@@ -85,7 +86,8 @@ if st.button('Estimate Errors', key='m8') and uploaded_file:
         ks_correct = 'error' if pvalue_ks < alpha else 'result'
         alpha_correct = first_type_error < alpha + 0.015
         beta_correct = second_type_error < beta + 0.015
-        if alpha_correct and beta_correct:  # pvalue_ks < 0.05 and
+
+        if alpha_correct and beta_correct:
             result_type = 'result'
             is_correct = 'Correct'
         else:
@@ -129,6 +131,3 @@ if st.button('Estimate Errors', key='m8') and uploaded_file:
         print(e)
         st.markdown("<p class='error'>Enter correct design parameters!</p>",
                     unsafe_allow_html=True)
-
-else:
-    pass

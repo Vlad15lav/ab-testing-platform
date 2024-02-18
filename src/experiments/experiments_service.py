@@ -9,7 +9,7 @@ from stqdm import stqdm
 class Design(BaseModel):
     """Дата-класс с описание параметров эксперимента.
 
-    statistical_test - тип статтеста. ['ttest', 'bootstrap']
+    statistical_test - тип статтеста. ['ttest', 'utest', 'bootstrap']
     effect - размер эффекта в процентах
     alpha - уровень значимости
     beta - допустимая вероятность ошибки II рода
@@ -55,12 +55,15 @@ class ExperimentsService:
                                          metrics_strat_b_group)
             else:
                 raise ValueError('Неверный design.stratification')
+        elif design.statistical_test == 'utest':
+            _, pvalue = stats.mannwhitneyu(metrics_strat_a_group,
+                                           metrics_strat_b_group)
+            return pvalue
         elif design.statistical_test == 'bootstrap':
             bootstrap_metrics, pe_metric = self._generate_bootstrap_metrics(
                 metrics_strat_a_group,
                 metrics_strat_b_group,
-                design
-                )
+                design)
             _, pvalue = self._run_bootstrap(bootstrap_metrics,
                                             pe_metric,
                                             design)
@@ -217,6 +220,54 @@ class ExperimentsService:
         else:
             raise ValueError('Неверное значение design.bootstrap_agg_func')
 
+    @staticmethod
+    def get_ci_bootstrap_normal(boot_metrics: np.array,
+                                pe_metric: float,
+                                alpha: float = 0.05):
+        """Строит нормальный доверительный интервал.
+
+        boot_metrics - значения метрики, полученные с помощью бутстрепа
+        pe_metric - точечная оценка метрики
+        alpha - уровень значимости
+
+        return: (left, right) - границы доверительного интервала.
+        """
+        c = stats.norm.ppf(1 - alpha / 2)
+        se = np.std(boot_metrics)
+        left, right = pe_metric - c * se, pe_metric + c * se
+        return left, right
+
+    @staticmethod
+    def get_ci_bootstrap_percentile(boot_metrics: np.array,
+                                    pe_metric: float,
+                                    alpha: float = 0.05):
+        """Строит доверительный интервал на процентилях.
+
+        boot_metrics - значения метрики, полученные с помощью бутстрепа
+        pe_metric - точечная оценка метрики
+        alpha - уровень значимости
+
+        return: (left, right) - границы доверительного интервала.
+        """
+        left, right = np.quantile(boot_metrics, [alpha / 2, 1 - alpha / 2])
+        return left, right
+
+    @staticmethod
+    def get_ci_bootstrap_pivotal(boot_metrics: np.array,
+                                 pe_metric: float,
+                                 alpha: float = 0.05):
+        """Строит центральный доверительный интервал.
+
+        boot_metrics - значения метрики, полученные с помощью бутстрепа
+        pe_metric - точечная оценка метрики
+        alpha - уровень значимости
+
+        return: (left, right) - границы доверительного интервала.
+        """
+        right, left = 2 * pe_metric - np.quantile(boot_metrics,
+                                                  [alpha / 2, 1 - alpha / 2])
+        return left, right
+
     def _run_bootstrap(self, bootstrap_metrics, pe_metric, design):
         """Строит доверительный интервал и проверяет
         значимость отличий с помощью бутстрепа.
@@ -234,10 +285,21 @@ class ExperimentsService:
                 не тривиально.
                 Поэтому мы будем использовать краевые значения 0 и 1.
         """
-        z_score_inv = stats.norm.ppf(1 - design.alpha / 2)
-        bootstrap_std = np.std(bootstrap_metrics)
-        left = pe_metric - z_score_inv * bootstrap_std
-        right = pe_metric + z_score_inv * bootstrap_std
+        if design.bootstrap_ci_type == 'normal':
+            left, right = self.get_ci_bootstrap_normal(bootstrap_metrics,
+                                                       pe_metric,
+                                                       design.alpha)
+        elif design.bootstrap_ci_type == 'percentile':
+            left, right = self.get_ci_bootstrap_percentile(bootstrap_metrics,
+                                                           pe_metric,
+                                                           design.alpha)
+        elif design.bootstrap_ci_type == 'pivotal':
+            left, right = self.get_ci_bootstrap_pivotal(bootstrap_metrics,
+                                                        pe_metric,
+                                                        design.alpha)
+        else:
+            raise 'Wrong bootstrap_ci_type'
+
         ci = (left, right)
         pvalue = float(left < 0 < right)
         return ci, pvalue

@@ -1,3 +1,4 @@
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -41,5 +42,50 @@ def plot_error_rate(first_type_error,
 
     axes[0].plot(first_type_error, '-o', alpha=0.7)
     axes[1].plot(second_type_error, '-o', alpha=0.7)
+
+    return fig
+
+
+def plot_interval(metric, ci, title=None):
+    """Визуализация доверительного интервала
+    """
+    fig = plt.figure()
+    if title:
+        plt.title(title)
+
+    left, right = ci
+
+    sns.histplot(metric, bins=30, stat='density')
+    plt.plot([0, 0], [0, 1], 'k--',
+             label='Null Hypothesis')
+    plt.plot([left, left], [0, 1], 'g--',
+             label='Interval')
+    plt.plot([right, right], [0, 1], 'g--')
+    plt.xlabel('bootstrap_metrics')
+    plt.ylabel('Density')
+    plt.legend()
+
+    return fig
+
+
+def plot_experiment(a_metric, b_metric, title=None):
+    """Визуализация A/B теста, распределение каждой группы
+    """
+    fig = plt.figure()
+    if title:
+        plt.title(title)
+
+    df_group_a = pd.DataFrame({'metric': a_metric})
+    df_group_b = pd.DataFrame({'metric': b_metric})
+
+    sns.histplot(data=df_group_a, x="metric", color="orange",
+                 alpha=0.6, kde=True, bins=50)
+    sns.histplot(data=df_group_b, x="metric", color="skyblue",
+                 alpha=0.6, kde=True, bins=50)
+
+    plt.xlabel("Metric")
+    plt.ylabel("Density")
+    plt.legend(title='Group',
+               labels=['Group A', 'Group B'])
 
     return fig
