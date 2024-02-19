@@ -2,8 +2,8 @@ import pandas as pd
 import streamlit as st
 
 from scipy import stats
-from src.experiments import Design, ExperimentsService
-from src.visualization import plot_pvalue_ecdf
+from experiments import Design, ExperimentsService
+from visualization import plot_pvalue_ecdf
 
 
 st.set_page_config(

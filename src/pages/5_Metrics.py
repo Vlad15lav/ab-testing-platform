@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from src.metrics import DataService, Design, MetricsService
+from metrics import DataService, Design, MetricsService
 # from src.visualization import plot_remove_outliers
 
 

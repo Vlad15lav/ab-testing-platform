@@ -1,8 +1,8 @@
 import pandas as pd
 import streamlit as st
 
-from src.experiments import get_sample_size
-from src.experiments import Design, ExperimentsService
+from experiments import get_sample_size
+from experiments import Design, ExperimentsService
 
 
 st.set_page_config(

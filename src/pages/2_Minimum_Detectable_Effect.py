@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from src.experiments import get_mde
+from experiments import get_mde
 
 
 st.set_page_config(

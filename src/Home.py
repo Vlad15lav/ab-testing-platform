@@ -13,7 +13,7 @@ def main():
     with st.expander("💡About Platform", True):
         st.write("A/B testing is a method of marketing research " +
                  "in which two versions of a strategy (A and B) are " +
-                 "compared to determine which one is more effective." +
+                 "compared to determine which one is more effective. " +
                  "In business, A/B testing is used to optimize web pages, " +
                  "advertising campaigns, email newsletters, and other " +
                  "elements of marketing strategy. It helps make informed " +
@@ -23,7 +23,7 @@ def main():
 
         _, col_center, _ = st.columns(3)
         with col_center:
-            st.image('src/images/ab_picture.jfif',
+            st.image('images/ab_picture.jfif',
                      caption='A/B Testing Picture')
 
     with st.expander("🧮Sample Size Calculator"):

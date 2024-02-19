@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.experiments import Design, ExperimentsService
-from src.visualization import plot_experiment
+from experiments import Design, ExperimentsService
+from visualization import plot_experiment
 
 
 st.set_page_config(
