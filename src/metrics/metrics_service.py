@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 
 from pydantic import BaseModel
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 
 class DataService:
@@ -87,10 +86,10 @@ class Design(BaseModel):
     bootstrap_iter: int = 1000
     bootstrap_ci_type: str = 'normal'
     bootstrap_agg_func: str = 'mean'
-    metric_name: str
-    metric_outlier_lower_bound: float
-    metric_outlier_upper_bound: float
-    metric_outlier_process_type: str
+    metric_name: str = 'revenue (all)'
+    metric_outlier_lower_bound: float = float('-inf')
+    metric_outlier_upper_bound: float = float('inf')
+    metric_outlier_process_type: str = 'clip'
 
 
 class MetricsService:
@@ -171,6 +170,7 @@ class MetricsService:
 
         users_revenue = users_revenue.groupby('user_id')['price'] \
             .sum().reset_index()
+
         return users_revenue.rename(columns={'price': 'metric'})
 
     def _calculate_revenue_all(self, begin_date, end_date, user_ids):
@@ -245,10 +245,12 @@ class MetricsService:
             begin_date=begin_date - timedelta(days=days),
             end_date=begin_date,
             user_ids=user_ids).rename(columns={'metric': 'cov'})
+
         Y_metric = self._calculate_revenue_web(
             begin_date=begin_date,
             end_date=end_date,
             user_ids=user_ids)
+
         if user_ids:
             df = pd.DataFrame({'user_id': user_ids})
         else:
@@ -297,7 +299,7 @@ class MetricsService:
                 return self._calculate_revenue_web(begin_date,
                                                    end_date,
                                                    user_ids)
-            elif cuped == 'on (previous weeks revenue)':
+            elif cuped == 'on':
                 return self._calculate_revenue_cuped(begin_date,
                                                      end_date,
                                                      user_ids,
@@ -518,7 +520,7 @@ if __name__ == '__main__':
     data_service = DataService({'sales': df_sales, 'web-logs': df_web_logs})
     metrics_service = MetricsService(data_service)
     metrics = metrics_service.calculate_metric(
-        'revenue (web)', begin_date, end_date, 'on (previous week revenue)'
+        'revenue (web)', begin_date, end_date, 'on'
     )
     _chech_df(metrics, ideal_metrics, ['user_id', 'metric'], True,
               True, decimal=1)

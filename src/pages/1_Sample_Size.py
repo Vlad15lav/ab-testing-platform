@@ -25,8 +25,6 @@ st.markdown(
     </style>""", unsafe_allow_html=True)
 
 st.title('🧮Sample Size Calculator')
-st.write('Find out the required sample size for the experiment. \
-         Use your values or upload historical data.')
 
 with st.expander("Minimum Sample Size for Estimating a Population Mean", True):
     col1, col2 = st.columns(2)

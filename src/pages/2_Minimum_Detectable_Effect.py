@@ -24,8 +24,6 @@ st.markdown(
     </style>""", unsafe_allow_html=True)
 
 st.title('🔍Minimum Detectable Effect')
-st.write('Determine the minimum effect you can detect. \
-         Use your values or upload historical data.')
 
 with st.expander("Minimum detectable effect for Estimating a Population Mean",
                  True):

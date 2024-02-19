@@ -37,6 +37,8 @@ with col1:
 with col2:
     test_option = st.selectbox('Statistical test',
                                ('T-test', 'U-test'), key='m3')
+    agg_option = st.selectbox('Aggregation metric',
+                              ('off', 'mean', 'sum'), key='m4')
 
 # Загрузка своего CSV файла
 uploaded_metric_file = st.file_uploader("Upload Metric CSV File", key='m5')
@@ -71,7 +73,7 @@ if uploaded_metric_file and uploaded_pilot_file:
 
         min_date, max_date = df_metric['date'].min(), df_metric['date'].max()
         period_experement = st.date_input("Select your period experiment\
-                                          [start_date, end_date)",
+                                          [start_date, end_date]",
                                           value=(min_date, max_date),
                                           min_value=min_date,
                                           max_value=max_date,
@@ -86,12 +88,15 @@ if st.button('Get Result', key='m8') and \
     try:
         begin_date = np.datetime64(period_experement[0])
         end_date = np.datetime64(period_experement[1])
+        end_date += np.timedelta64(1, 'D')
+
         df_metric = df_metric[(df_metric['date'] >= begin_date) &
                               (df_metric['date'] < end_date)]
 
-        if strat_option == 'off':
-            df_metric = df_metric.groupby('user_id')[['metric']]\
-                .sum().reset_index()
+        if strat_option == 'off' and agg_option != 'off':
+            df_metric = df_metric.groupby('user_id')\
+                .agg({'metric': agg_option}).reset_index()
+
         test_option = 'ttest' if test_option == 'T-test' else 'utest'
 
         design = Design(alpha=float(alp_level),

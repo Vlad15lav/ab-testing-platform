@@ -68,6 +68,24 @@ def plot_interval(metric, ci, title=None):
     return fig
 
 
+def plot_remove_outliers(metric, left, right, title=None):
+    """Визуализация удаления выбросов
+    """
+    fig = plt.figure()
+    if title:
+        plt.title(title)
+
+    sns.histplot(metric, bins=30, stat='density')
+    plt.plot([left, left], [0, 1], 'g--',
+             label='Interval')
+    plt.plot([right, right], [0, 1], 'g--')
+    plt.xlabel('Metric')
+    plt.ylabel('Density')
+    plt.legend()
+
+    return fig
+
+
 def plot_experiment(a_metric, b_metric, title=None):
     """Визуализация A/B теста, распределение каждой группы
     """
