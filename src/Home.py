@@ -23,7 +23,7 @@ def main():
 
         _, col_center, _ = st.columns(3)
         with col_center:
-            st.image('images/ab_picture.png',
+            st.image('./images/ab_picture.png',
                      caption='A/B Testing Picture')
 
     with st.expander("🧮Sample Size Calculator"):
