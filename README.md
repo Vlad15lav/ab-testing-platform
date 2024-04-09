@@ -1,57 +1,62 @@
-ab-testing
-==============================
+# Платформа A/B тестирования
 
-A/B Testing toolkits
+Эта сервис A/B тестов для проведения экспериментов. Данная платформа позволяет легко и удобно загрузить свои данные и сразу получить результат эксперимента. 
 
-Project Organization
-------------
+Воспользоваться сервисом можно сейчас на [Streamlit Cloud](https://ab-test.streamlit.app/).
 
-    ├── LICENSE
-    ├── Makefile           <- Makefile with commands like `make data` or `make train`
-    ├── README.md          <- The top-level README for developers using this project.
-    ├── data
-    │   ├── external       <- Data from third party sources.
-    │   ├── interim        <- Intermediate data that has been transformed.
-    │   ├── processed      <- The final, canonical data sets for modeling.
-    │   └── raw            <- The original, immutable data dump.
-    │
-    ├── docs               <- A default Sphinx project; see sphinx-doc.org for details
-    │
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
-    │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's initials, and a short `-` delimited description, e.g.
-    │                         `1.0-jqp-initial-data-exploration`.
-    │
-    ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
-    │
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    │
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
-    │
-    ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
-    ├── src                <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
-    │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   └── make_dataset.py
-    │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
-    │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │       └── visualize.py
-    │
-    └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
+## Функционал платформы
+На платформе пользователь можешь выполнить следующее:
+- Оценить размер выборки для эксперимента.
+- Оценить Minimal Detectable Effect.
+- Запустить A/A и синтетический A/B тест для поверки корректности эксперимента.
+- Построить доверительный интервал Bootstrap.
+- Вычислить метрику Revenue, Linearization, CUPED.
+- Поддержка метода Post-Stratification.
+- Проверить результаты эксперимента с указанием его дизайна.
 
+## Запуск приложения
 
---------
+Установите Python 3.11 зависимости для проекта:
+```bash
+pip install -r requirements.txt
+```
 
-<p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
+Запустите Web сервис Streamlit с помощью команды:
+```bash
+streamlit run src/Home.py
+```
+
+Перейдите по ссылке сервиса [localhost:8501](http://localhost:8501).
+
+## Запуск сервиса Docker
+
+Создайте образ Docker:
+```bash
+docker build -t ab_service .
+```
+
+Запустите контейнер с сервисом:
+```bash
+docker run -p 8501:8501 ab_service
+```
+
+## Полезные ссылки
+
+Ноутбуки с материалами:
+- [Основы статистики](/references/1_statistical_terms.ipynb)
+- [Тестирование гипотез](/references/2_hypothesis_testing.ipynb)
+- [MDE](/references/3_mde.ipynb)
+- [Дизайн эксперимента](/references/4_design.ipynb)
+- [Доверительный интервал и Bootstrap](/references/5_bootstrap.ipynb)
+- [Повышение чувствительности](/references/6_variance_reduction.ipynb)
+- [Стратификация](/references/7_stratification.ipynb)
+- [CUPED](/references/8_cuped.ipynb)
+- [Множественное тестирование](/references/9_multiple_testing_problem.ipynb)
+- [Split система](/references/10_split_testing.ipynb)
+- [Линеаризация](/references/11_linearization.ipynb)
+- [Последовательное тестирование](/references/12_sequential_testing.ipynb)
+
+Другие источники:
+- [5 лайфхаков для ускорения А/B-тестирования от аналитиков MyTracker](https://tracker.my.com/blog/204/5-lajfhakov-dlya-uskoreniya-a-b-testirovaniya-ot-analitikov-mytracker?lang=ru)
+- [Switchback-эксперименты в Ситимобил](https://habr.com/ru/companies/citymobil/articles/560426/)
+- [Reliable ML AB Testing & Causal Inference Meetup](https://ods.ai/tracks/reliable_ml_ab_testing-causal_inference_meetup)
